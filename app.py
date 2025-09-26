@@ -4,6 +4,7 @@ import json
 from time import time
 import random
 import uuid
+import string
 
 # ------------------------
 # Blockchain Class
@@ -69,17 +70,23 @@ class Blockchain:
                 return True, t
         return False, None
 
+# ------------------------
+# Helper: Generate Unique Ticket ID
+# ------------------------
+def generate_ticket_id():
+    rand_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"EVT-2025-{rand_part}"
 
 # ------------------------
 # App Setup
 # ------------------------
-
 st.set_page_config(page_title="Blockchain Ticket App", layout="centered")
 st.title("🎟️ Blockchain-Based Event Ticketing System")
 
+# Initialize Blockchain
 blockchain = Blockchain()
 
-# Generate static events with random prices
+# Static events with random prices
 events = {
     "🎤 Music Concert": random.randint(1000, 2000),
     "⚽ Football Match": random.randint(800, 1500),
@@ -88,6 +95,9 @@ events = {
     "🎮 Esports Tournament": random.randint(700, 1300)
 }
 
+# ------------------------
+# Navigation
+# ------------------------
 menu = st.sidebar.selectbox("Navigation", ["Buy Ticket", "Verify Ticket", "Blockchain Ledger"])
 
 # ------------------------
@@ -107,8 +117,8 @@ if menu == "Buy Ticket":
             st.success(f"Price for **{selected_event}** is ₹{price}")
 
             if st.button("Confirm & Buy Ticket"):
-                # Auto-generate ticket ID
-                ticket_id = str(uuid.uuid4())[:8]
+                ticket_id = generate_ticket_id()
+
                 ticket_data = {
                     "ticket_id": ticket_id,
                     "name": name,
@@ -132,7 +142,7 @@ if menu == "Buy Ticket":
 elif menu == "Verify Ticket":
     st.header("🔍 Verify Your Ticket")
 
-    ticket_id = st.text_input("Enter Ticket ID to verify")
+    ticket_id = st.text_input("Enter Ticket ID to verify (e.g., EVT-2025-AB12)")
 
     if st.button("Verify"):
         if not ticket_id:
@@ -173,4 +183,3 @@ elif menu == "Blockchain Ledger":
         previous_hash = blockchain.hash(last_block)
         block = blockchain.create_block(proof, previous_hash)
         st.success(f"✅ Block {block['index']} mined and tickets confirmed!")
-
