@@ -86,4 +86,81 @@ events = {
 # ------------------------
 # Streamlit UI
 # ------------------------
-st.set_page_config(page_title="Blockchain Ticket App", layout="c_
+st.set_page_config(page_title="Blockchain Ticket App", layout="centered")
+st.title("🎟️ Blockchain Event Ticketing System")
+
+menu = st.sidebar.selectbox("Menu", ["Buy Ticket", "Verify Ticket", "Blockchain"])
+
+# ------------------------
+# Buy Ticket
+# ------------------------
+if menu == "Buy Ticket":
+    st.header("🎫 Book Your Ticket")
+    name = st.text_input("Enter your name")
+    selected_event = st.selectbox("Choose an event", list(events.keys()))
+
+    if st.button("Check Price"):
+        if not name:
+            st.warning("Please enter your name first.")
+        else:
+            price = events[selected_event]
+            st.success(f"Price for **{selected_event}** is ₹{price}")
+            if st.button("Confirm & Buy Ticket"):
+                ticket_id = str(uuid.uuid4())[:8]
+                ticket_data = {
+                    "ticket_id": ticket_id,
+                    "name": name,
+                    "event": selected_event,
+                    "price": price
+                }
+                success = blockchain.add_ticket(ticket_data)
+                if success:
+                    st.success(f"✅ Ticket Booked!\n**Ticket ID:** `{ticket_id}`\n**Event:** {selected_event}\n**Price:** ₹{price}")
+                else:
+                    st.error("⚠️ Ticket could not be added (possibly duplicate ID). Try again.")
+
+# ------------------------
+# Verify Ticket
+# ------------------------
+elif menu == "Verify Ticket":
+    st.header("🔍 Verify Your Ticket")
+    ticket_id = st.text_input("Enter Ticket ID to verify")
+
+    if st.button("Verify"):
+        if not ticket_id:
+            st.warning("Please enter a Ticket ID.")
+        else:
+            valid, ticket = blockchain.verify_ticket(ticket_id.strip())
+            if valid:
+                st.success("✅ Ticket is VALID!")
+                st.write(f"**Name:** {ticket['name']}")
+                st.write(f"**Event:** {ticket['event']}")
+                st.write(f"**Price:** ₹{ticket['price']}")
+                st.write(f"**Ticket ID:** {ticket['ticket_id']}")
+            else:
+                st.error("❌ Ticket not found or invalid.")
+
+# ------------------------
+# View Blockchain
+# ------------------------
+elif menu == "Blockchain":
+    st.header("⛓️ Blockchain Ledger")
+    for block in blockchain.chain:
+        st.subheader(f"Block {block['index']}")
+        st.write(f"⏱️ Timestamp: {block['timestamp']}")
+        st.write(f"🔐 Previous Hash: {block['previous_hash']}")
+        st.write(f"💡 Proof: {block['proof']}")
+        if block['tickets']:
+            st.write("🎫 Tickets:")
+            for t in block['tickets']:
+                st.write(f"- {t['ticket_id']} | {t['name']} | {t['event']} | ₹{t['price']}")
+        else:
+            st.write("No tickets in this block.")
+        st.markdown("---")
+
+    if st.button("🪙 Mine New Block"):
+        last_block = blockchain.get_last_block()
+        proof = blockchain.proof_of_work(last_block['proof'])
+        previous_hash = blockchain.hash(last_block)
+        block = blockchain.create_block(proof, previous_hash)
+        st.success(f"✅ Block {block['index']} mined and tickets confirmed!")
