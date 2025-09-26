@@ -109,15 +109,40 @@ if menu == "Buy Ticket":
     name = st.text_input("Enter your name")
     selected_event = st.selectbox("Choose an event", list(events.keys()))
 
-    if st.button("Check Price"):
-        if not name:
-            st.warning("Please enter your name first.")
-        else:
-            price = events[selected_event]
-            st.success(f"Price for **{selected_event}** is ₹{price}")
+   if st.button("Check Price"):
+    if not name:
+        st.warning("Please enter your name first.")
+    else:
+        price = events[selected_event]
+        st.success(f"Price for **{selected_event}** is ₹{price}")
+        st.session_state["pending_event"] = selected_event
+        st.session_state["pending_name"] = name
+        st.session_state["pending_price"] = price
 
-            if st.button("Confirm & Buy Ticket"):
-                ticket_id = generate_ticket_id()
+if "pending_price" in st.session_state:
+    if st.button("Confirm & Buy Ticket"):
+        ticket_id = generate_ticket_id()
+
+        ticket_data = {
+            "ticket_id": ticket_id,
+            "name": st.session_state["pending_name"],
+            "event": st.session_state["pending_event"],
+            "price": st.session_state["pending_price"]
+        }
+
+        success = blockchain.add_ticket(ticket_data)
+        if success:
+            st.success("✅ Ticket Booked Successfully!")
+            st.write(f"**🎫 Ticket ID:** `{ticket_id}`")
+            st.write(f"**Name:** {ticket_data['name']}")
+            st.write(f"**Event:** {ticket_data['event']}")
+            st.write(f"**Price:** ₹{ticket_data['price']}")
+        else:
+            st.error("⚠️ This ticket ID already exists. Try again.")
+
+        # Clean up after purchase
+        for key in ["pending_price", "pending_event", "pending_name"]:
+            st.session_state.pop(key, None)
 
                 ticket_data = {
                     "ticket_id": ticket_id,
