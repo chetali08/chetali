@@ -2,13 +2,19 @@ import streamlit as st
 import hashlib
 import json
 from time import time
+import qrcode
+from io import BytesIO
+import random
+import uuid
 
-# Simple blockchain class simulating ticket storage
+# ------------------------
+# Blockchain Class
+# ------------------------
 class Blockchain:
     def __init__(self):
         self.chain = []
         self.current_tickets = []
-        self.create_block(previous_hash='1', proof=100)  # Genesis block
+        self.create_block(proof=100, previous_hash='1')  # Genesis block
 
     def create_block(self, proof, previous_hash):
         block = {
@@ -27,102 +33,157 @@ class Blockchain:
 
     def proof_of_work(self, last_proof):
         proof = 0
-        while self.valid_proof(last_proof, proof) is False:
+        while not self.valid_proof(last_proof, proof):
             proof += 1
         return proof
 
-    @staticmethod
-    def valid_proof(last_proof, proof):
+    def valid_proof(self, last_proof, proof):
         guess = f'{last_proof}{proof}'.encode()
         guess_hash = hashlib.sha256(guess).hexdigest()
         return guess_hash[:4] == "0000"
 
-    @staticmethod
-    def hash(block):
-        block_string = json.dumps(block, sort_keys=True).encode()
-        return hashlib.sha256(block_string).hexdigest()
+    def hash(self, block):
+        return hashlib.sha256(json.dumps(block, sort_keys=True).encode()).hexdigest()
 
-    def add_ticket(self, ticket_id, buyer_name):
-        # Check ticket uniqueness (no duplicates)
-        for block in self.chain:
-            for ticket in block['tickets']:
-                if ticket['ticket_id'] == ticket_id:
-                    return False  # Ticket ID already exists
-        for ticket in self.current_tickets:
-            if ticket['ticket_id'] == ticket_id:
-                return False
-
-        self.current_tickets.append({
-            'ticket_id': ticket_id,
-            'buyer_name': buyer_name
-        })
+    def add_ticket(self, ticket):
+        # Prevent duplicate ticket IDs
+        if self.ticket_exists(ticket['ticket_id']):
+            return False
+        self.current_tickets.append(ticket)
         return True
+
+    def ticket_exists(self, ticket_id):
+        for block in self.chain:
+            for t in block['tickets']:
+                if t['ticket_id'] == ticket_id:
+                    return True
+        for t in self.current_tickets:
+            if t['ticket_id'] == ticket_id:
+                return True
+        return False
 
     def verify_ticket(self, ticket_id):
         for block in self.chain:
-            for ticket in block['tickets']:
-                if ticket['ticket_id'] == ticket_id:
-                    return True, ticket['buyer_name']
-        for ticket in self.current_tickets:
-            if ticket['ticket_id'] == ticket_id:
-                return True, ticket['buyer_name']
+            for t in block['tickets']:
+                if t['ticket_id'] == ticket_id:
+                    return True, t
+        for t in self.current_tickets:
+            if t['ticket_id'] == ticket_id:
+                return True, t
         return False, None
 
-# Initialize blockchain instance
+# ------------------------
+# Generate QR Code
+# ------------------------
+def generate_qr_code(data):
+    qr = qrcode.QRCode(box_size=5, border=2)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = BytesIO()
+    img.save(buf)
+    return buf.getvalue()
+
+# ------------------------
+# App Initialization
+# ------------------------
 blockchain = Blockchain()
 
+# Static events with random prices
+events = {
+    "🎤 Music Concert": random.randint(1000, 2000),
+    "⚽ Football Match": random.randint(800, 1500),
+    "🎬 Movie Premiere": random.randint(500, 1000),
+    "💼 Business Conference": random.randint(1500, 3000),
+    "🎮 Esports Tournament": random.randint(700, 1300)
+}
+
+# ------------------------
 # Streamlit UI
-st.title("🎟️ Blockchain-based Event Ticketing System")
+# ------------------------
+st.set_page_config(page_title="Blockchain Ticket App", layout="centered")
+st.title("🎟️ Blockchain Event Ticketing System")
 
-menu = st.sidebar.selectbox("Menu", ["Buy Ticket", "Verify Ticket", "View Blockchain"])
+menu = st.sidebar.selectbox("Menu", ["Buy Ticket", "Verify Ticket", "Blockchain"])
 
+# ------------------------
+# Buy Ticket
+# ------------------------
 if menu == "Buy Ticket":
-    st.header("Buy a Ticket")
-    ticket_id = st.text_input("Enter unique Ticket ID")
-    buyer_name = st.text_input("Your Name")
+    st.header("🎫 Book Your Ticket")
+    name = st.text_input("Enter your name")
+    selected_event = st.selectbox("Choose an event", list(events.keys()))
 
     if st.button("Buy Ticket"):
-        if ticket_id == "" or buyer_name == "":
-            st.warning("Please enter both Ticket ID and your name.")
+        if not name:
+            st.warning("Please enter your name.")
         else:
-            success = blockchain.add_ticket(ticket_id, buyer_name)
-            if success:
-                st.success(f"Ticket '{ticket_id}' bought successfully for {buyer_name}!")
-            else:
-                st.error("Ticket ID already exists! Please use a unique Ticket ID.")
+            ticket_id = str(uuid.uuid4())[:8]  # Short unique ID
+            price = events[selected_event]
+            ticket_data = {
+                "ticket_id": ticket_id,
+                "name": name,
+                "event": selected_event,
+                "price": price
+            }
 
+            success = blockchain.add_ticket(ticket_data)
+            if success:
+                st.success(f"🎉 Ticket Purchased! Ticket ID: `{ticket_id}`")
+                st.write(f"**Name:** {name}")
+                st.write(f"**Event:** {selected_event}")
+                st.write(f"**Price:** ₹{price}")
+                
+                # Generate and show QR code
+                qr_content = f"TicketID: {ticket_id}, Name: {name}, Event: {selected_event}, Price: ₹{price}"
+                qr_img = generate_qr_code(qr_content)
+                st.image(qr_img, caption="Your Ticket QR Code")
+            else:
+                st.error("Ticket ID already exists. Try again.")
+
+# ------------------------
+# Verify Ticket
+# ------------------------
 elif menu == "Verify Ticket":
-    st.header("Verify Ticket Validity")
-    ticket_id = st.text_input("Enter Ticket ID to Verify")
+    st.header("🔍 Verify Your Ticket")
+    ticket_id = st.text_input("Enter Ticket ID to verify")
 
     if st.button("Verify"):
-        if ticket_id == "":
+        if not ticket_id:
             st.warning("Please enter a Ticket ID.")
         else:
-            valid, buyer = blockchain.verify_ticket(ticket_id)
+            valid, ticket = blockchain.verify_ticket(ticket_id.strip())
             if valid:
-                st.success(f"Ticket ID '{ticket_id}' is VALID, owned by {buyer}.")
+                st.success("✅ Ticket is VALID!")
+                st.write(f"**Name:** {ticket['name']}")
+                st.write(f"**Event:** {ticket['event']}")
+                st.write(f"**Price:** ₹{ticket['price']}")
+                st.write(f"**Ticket ID:** {ticket['ticket_id']}")
             else:
-                st.error("Ticket ID NOT FOUND or invalid.")
+                st.error("❌ Ticket not found or invalid.")
 
-elif menu == "View Blockchain":
-    st.header("Blockchain Ledger")
+# ------------------------
+# View Blockchain
+# ------------------------
+elif menu == "Blockchain":
+    st.header("⛓️ Blockchain Ledger")
     for block in blockchain.chain:
-        st.write(f"Block Index: {block['index']}")
-        st.write(f"Timestamp: {block['timestamp']}")
-        st.write(f"Previous Hash: {block['previous_hash']}")
-        st.write(f"Proof: {block['proof']}")
-        st.write("Tickets:")
-        for ticket in block['tickets']:
-            st.write(f"- {ticket['ticket_id']} owned by {ticket['buyer_name']}")
-        st.write("---")
+        st.subheader(f"Block {block['index']}")
+        st.write(f"⏱️ Timestamp: {block['timestamp']}")
+        st.write(f"🔐 Previous Hash: {block['previous_hash']}")
+        st.write(f"💡 Proof: {block['proof']}")
+        if block['tickets']:
+            st.write("🎫 Tickets:")
+            for t in block['tickets']:
+                st.write(f"- {t['ticket_id']} | {t['name']} | {t['event']} | ₹{t['price']}")
+        else:
+            st.write("No tickets in this block.")
+        st.markdown("---")
 
-    # Button to mine block and confirm current tickets
-    if st.button("Confirm Tickets (Mine Block)"):
+    if st.button("🪙 Mine New Block"):
         last_block = blockchain.get_last_block()
-        last_proof = last_block['proof']
-        proof = blockchain.proof_of_work(last_proof)
+        proof = blockchain.proof_of_work(last_block['proof'])
         previous_hash = blockchain.hash(last_block)
         block = blockchain.create_block(proof, previous_hash)
-        st.success(f"New block mined! Block index: {block['index']}")
+        st.success(f"✅ Block {block['index']} mined and tickets confirmed!")
 
