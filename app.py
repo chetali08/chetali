@@ -1,192 +1,63 @@
-import streamlit as st
 import hashlib
-import json
-from time import time
-import random
-import string
+import uuid
 
-# ------------------------
-# Blockchain Class
-# ------------------------
-class Blockchain:
+# Blockchain-like structure
+class BlockchainTicketing:
     def __init__(self):
-        self.chain = []
-        self.current_tickets = []
-        self.create_block(proof=100, previous_hash='1')  # Genesis block
-
-    def create_block(self, proof, previous_hash):
-        block = {
-            'index': len(self.chain) + 1,
-            'timestamp': time(),
-            'tickets': self.current_tickets,
-            'proof': proof,
-            'previous_hash': previous_hash
+        self.chain = []  # list to hold tickets (blocks)
+        self.events = {
+            "Concert": 1500,
+            "Sports": 1200,
+            "Theatre": 800,
+            "Stand-up Comedy": 1000,
+            "Workshop": 600
         }
-        self.current_tickets = []
+
+    def generate_ticket_id(self, user_name, event):
+        unique_string = user_name + event + str(uuid.uuid4())
+        ticket_id = hashlib.sha256(unique_string.encode()).hexdigest()
+        return ticket_id
+
+    def purchase_ticket(self, user_name, event):
+        if event not in self.events:
+            return None
+        ticket_id = self.generate_ticket_id(user_name, event)
+        block = {
+            "user": user_name,
+            "event": event,
+            "price": self.events[event],
+            "ticket_id": ticket_id
+        }
         self.chain.append(block)
-        return block
-
-    def get_last_block(self):
-        return self.chain[-1]
-
-    def proof_of_work(self, last_proof):
-        proof = 0
-        while not self.valid_proof(last_proof, proof):
-            proof += 1
-        return proof
-
-    def valid_proof(self, last_proof, proof):
-        guess = f'{last_proof}{proof}'.encode()
-        guess_hash = hashlib.sha256(guess).hexdigest()
-        return guess_hash[:4] == "0000"
-
-    def hash(self, block):
-        return hashlib.sha256(json.dumps(block, sort_keys=True).encode()).hexdigest()
-
-    def add_ticket(self, ticket):
-        if self.ticket_exists(ticket['ticket_id']):
-            return False
-        self.current_tickets.append(ticket)
-        return True
-
-    def ticket_exists(self, ticket_id):
-        for block in self.chain:
-            for t in block['tickets']:
-                if t['ticket_id'] == ticket_id:
-                    return True
-        for t in self.current_tickets:
-            if t['ticket_id'] == ticket_id:
-                return True
-        return False
+        return ticket_id
 
     def verify_ticket(self, ticket_id):
         for block in self.chain:
-            for t in block['tickets']:
-                if t['ticket_id'] == ticket_id:
-                    return True, t
-        for t in self.current_tickets:
-            if t['ticket_id'] == ticket_id:
-                return True, t
+            if block["ticket_id"] == ticket_id:
+                return True, block
         return False, None
 
-# ------------------------
-# Helper: Generate Unique Ticket ID
-# ------------------------
-def generate_ticket_id():
-    rand_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    return f"EVT-2025-{rand_part}"
 
-# ------------------------
-# Streamlit App Setup
-# ------------------------
-st.set_page_config(page_title="Blockchain Ticket App", layout="centered")
-st.title("🎟️ Blockchain-Based Event Ticketing System")
+# Example simulation
+if __name__ == "__main__":
+    system = BlockchainTicketing()
 
-# Initialize Blockchain
-blockchain = Blockchain()
+    # Sample ticket purchases
+    t1 = system.purchase_ticket("Alice", "Concert")
+    t2 = system.purchase_ticket("Bob", "Sports")
+    t3 = system.purchase_ticket("Charlie", "Workshop")
 
-# Static events with random prices (fixed for session)
-if "events" not in st.session_state:
-    st.session_state["events"] = {
-        "🎤 Music Concert": random.randint(1000, 2000),
-        "⚽ Football Match": random.randint(800, 1500),
-        "🎬 Movie Premiere": random.randint(500, 1000),
-        "💼 Business Conference": random.randint(1500, 3000),
-        "🎮 Esports Tournament": random.randint(700, 1300)
-    }
-events = st.session_state["events"]
+    print("Generated Ticket IDs:")
+    print(f"Alice: {t1}")
+    print(f"Bob: {t2}")
+    print(f"Charlie: {t3}")
 
-# ------------------------
-# Navigation Menu
-# ------------------------
-menu = st.sidebar.selectbox("Navigation", ["Buy Ticket", "Verify Ticket", "Blockchain Ledger"])
+    # Verifying a ticket
+    verify_id = t2  # checking Bob's ticket
+    is_valid, details = system.verify_ticket(verify_id)
 
-# ------------------------
-# Buy Ticket Section
-# ------------------------
-if menu == "Buy Ticket":
-    st.header("🎫 Book Your Ticket")
-
-    name = st.text_input("Enter your name")
-    selected_event = st.selectbox("Choose an event", list(events.keys()))
-
-    if st.button("Check Price"):
-        if not name:
-            st.warning("Please enter your name first.")
-        else:
-            price = events[selected_event]
-            st.success(f"Price for **{selected_event}** is ₹{price}")
-            # Store details in session state for purchase confirmation
-            st.session_state["pending_name"] = name
-            st.session_state["pending_event"] = selected_event
-            st.session_state["pending_price"] = price
-
-    if "pending_price" in st.session_state:
-        if st.button("Confirm & Buy Ticket"):
-            ticket_id = generate_ticket_id()
-            ticket_data = {
-                "ticket_id": ticket_id,
-                "name": st.session_state["pending_name"],
-                "event": st.session_state["pending_event"],
-                "price": st.session_state["pending_price"]
-            }
-            success = blockchain.add_ticket(ticket_data)
-            if success:
-                st.success("✅ Ticket Booked Successfully!")
-                st.write(f"**🎫 Ticket ID:** `{ticket_id}`")
-                st.write(f"**Name:** {ticket_data['name']}")
-                st.write(f"**Event:** {ticket_data['event']}")
-                st.write(f"**Price:** ₹{ticket_data['price']}")
-            else:
-                st.error("⚠️ This ticket ID already exists. Try again.")
-            # Clear session state to reset form
-            for key in ["pending_name", "pending_event", "pending_price"]:
-                st.session_state.pop(key)
-
-# ------------------------
-# Verify Ticket Section
-# ------------------------
-elif menu == "Verify Ticket":
-    st.header("🔍 Verify Your Ticket")
-
-    ticket_id = st.text_input("Enter Ticket ID to verify (e.g., EVT-2025-AB12)")
-
-    if st.button("Verify"):
-        if not ticket_id:
-            st.warning("Please enter a Ticket ID.")
-        else:
-            valid, ticket = blockchain.verify_ticket(ticket_id.strip())
-            if valid:
-                st.success("✅ Ticket is VALID!")
-                st.write(f"**Ticket ID:** {ticket['ticket_id']}")
-                st.write(f"**Name:** {ticket['name']}")
-                st.write(f"**Event:** {ticket['event']}")
-                st.write(f"**Price:** ₹{ticket['price']}")
-            else:
-                st.error("❌ Ticket not found or invalid.")
-
-# ------------------------
-# Blockchain Ledger Section
-# ------------------------
-elif menu == "Blockchain Ledger":
-    st.header("⛓️ Blockchain Ledger")
-
-    for block in blockchain.chain:
-        st.subheader(f"Block {block['index']}")
-        st.write(f"⏱️ Timestamp: {block['timestamp']}")
-        st.write(f"🔐 Previous Hash: {block['previous_hash']}")
-        st.write(f"💡 Proof: {block['proof']}")
-        st.write("🎫 Tickets:")
-        if block['tickets']:
-            for t in block['tickets']:
-                st.markdown(f"- **{t['ticket_id']}** | {t['name']} | {t['event']} | ₹{t['price']}")
-        else:
-            st.write("- No tickets in this block.")
-        st.markdown("---")
-
-    if st.button("🪙 Mine New Block"):
-        last_block = blockchain.get_last_block()
-        proof = blockchain.proof_of_work(last_block['proof'])
-        previous_hash = blockchain.hash(last_block)
-        block = blockchain.create_block(proof, previous_hash)
-        st.success(f"✅ Block {block['index']} mined and tickets confirmed!")
+    if is_valid:
+        print("\nTicket Verified!")
+        print(f"Owner: {details['user']}, Event: {details['event']}, Price: ₹{details['price']}")
+    else:
+        print("\nInvalid Ticket!")
