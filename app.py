@@ -3,7 +3,6 @@ import hashlib
 import json
 from time import time
 import random
-import uuid
 import string
 
 # ------------------------
@@ -78,7 +77,7 @@ def generate_ticket_id():
     return f"EVT-2025-{rand_part}"
 
 # ------------------------
-# App Setup
+# Streamlit App Setup
 # ------------------------
 st.set_page_config(page_title="Blockchain Ticket App", layout="centered")
 st.title("🎟️ Blockchain-Based Event Ticketing System")
@@ -86,80 +85,66 @@ st.title("🎟️ Blockchain-Based Event Ticketing System")
 # Initialize Blockchain
 blockchain = Blockchain()
 
-# Static events with random prices
-events = {
-    "🎤 Music Concert": random.randint(1000, 2000),
-    "⚽ Football Match": random.randint(800, 1500),
-    "🎬 Movie Premiere": random.randint(500, 1000),
-    "💼 Business Conference": random.randint(1500, 3000),
-    "🎮 Esports Tournament": random.randint(700, 1300)
-}
+# Static events with random prices (fixed for session)
+if "events" not in st.session_state:
+    st.session_state["events"] = {
+        "🎤 Music Concert": random.randint(1000, 2000),
+        "⚽ Football Match": random.randint(800, 1500),
+        "🎬 Movie Premiere": random.randint(500, 1000),
+        "💼 Business Conference": random.randint(1500, 3000),
+        "🎮 Esports Tournament": random.randint(700, 1300)
+    }
+events = st.session_state["events"]
 
 # ------------------------
-# Navigation
+# Navigation Menu
 # ------------------------
 menu = st.sidebar.selectbox("Navigation", ["Buy Ticket", "Verify Ticket", "Blockchain Ledger"])
 
 # ------------------------
-# Buy Ticket
+# Buy Ticket Section
 # ------------------------
 if menu == "Buy Ticket":
     st.header("🎫 Book Your Ticket")
 
     name = st.text_input("Enter your name")
     selected_event = st.selectbox("Choose an event", list(events.keys()))
-    
-    else:
-        price = events[selected_event]
-        st.success(f"Price for **{selected_event}** is ₹{price}")
-        st.session_state["pending_event"] = selected_event
-        st.session_state["pending_name"] = name
-        st.session_state["pending_price"] = price
 
-if "pending_price" in st.session_state:
-    if st.button("Confirm & Buy Ticket"):
-        ticket_id = generate_ticket_id()
-
-        ticket_data = {
-            "ticket_id": ticket_id,
-            "name": st.session_state["pending_name"],
-            "event": st.session_state["pending_event"],
-            "price": st.session_state["pending_price"]
-        }
-
-        success = blockchain.add_ticket(ticket_data)
-        if success:
-            st.success("✅ Ticket Booked Successfully!")
-            st.write(f"**🎫 Ticket ID:** `{ticket_id}`")
-            st.write(f"**Name:** {ticket_data['name']}")
-            st.write(f"**Event:** {ticket_data['event']}")
-            st.write(f"**Price:** ₹{ticket_data['price']}")
+    if st.button("Check Price"):
+        if not name:
+            st.warning("Please enter your name first.")
         else:
-            st.error("⚠️ This ticket ID already exists. Try again.")
+            price = events[selected_event]
+            st.success(f"Price for **{selected_event}** is ₹{price}")
+            # Store details in session state for purchase confirmation
+            st.session_state["pending_name"] = name
+            st.session_state["pending_event"] = selected_event
+            st.session_state["pending_price"] = price
 
-        # Clean up after purchase
-        for key in ["pending_price", "pending_event", "pending_name"]:
-            st.session_state.pop(key, None)
-
-                ticket_data = {
-                    "ticket_id": ticket_id,
-                    "name": name,
-                    "event": selected_event,
-                    "price": price
-                }
-
-                success = blockchain.add_ticket(ticket_data)
-                if success:
-                    st.success("✅ Ticket Booked Successfully!")
-                    st.write(f"**🎫 Ticket ID:** `{ticket_id}`")
-                    st.write(f"**Name:** {name}")
-                    st.write(f"**Event:** {selected_event}")
-                    st.write(f"**Price:** ₹{price}")
-                else:
-                    st.error("⚠️ This ticket ID already exists. Try again.")
+    if "pending_price" in st.session_state:
+        if st.button("Confirm & Buy Ticket"):
+            ticket_id = generate_ticket_id()
+            ticket_data = {
+                "ticket_id": ticket_id,
+                "name": st.session_state["pending_name"],
+                "event": st.session_state["pending_event"],
+                "price": st.session_state["pending_price"]
+            }
+            success = blockchain.add_ticket(ticket_data)
+            if success:
+                st.success("✅ Ticket Booked Successfully!")
+                st.write(f"**🎫 Ticket ID:** `{ticket_id}`")
+                st.write(f"**Name:** {ticket_data['name']}")
+                st.write(f"**Event:** {ticket_data['event']}")
+                st.write(f"**Price:** ₹{ticket_data['price']}")
+            else:
+                st.error("⚠️ This ticket ID already exists. Try again.")
+            # Clear session state to reset form
+            for key in ["pending_name", "pending_event", "pending_price"]:
+                st.session_state.pop(key)
 
 # ------------------------
-# Verify Ticket
+# Verify Ticket Section
 # ------------------------
 elif menu == "Verify Ticket":
     st.header("🔍 Verify Your Ticket")
@@ -181,7 +166,7 @@ elif menu == "Verify Ticket":
                 st.error("❌ Ticket not found or invalid.")
 
 # ------------------------
-# Blockchain View
+# Blockchain Ledger Section
 # ------------------------
 elif menu == "Blockchain Ledger":
     st.header("⛓️ Blockchain Ledger")
