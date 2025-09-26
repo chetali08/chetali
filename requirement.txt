@@ -1,4 +1,7 @@
-streamlit
+# Required Libraries
+# Currently, only Python standard libraries are used.
+
+# Optional (for future extensions)
 qrcode
-Pillow
+Flask
 
