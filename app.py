@@ -108,10 +108,6 @@ if menu == "Buy Ticket":
 
     name = st.text_input("Enter your name")
     selected_event = st.selectbox("Choose an event", list(events.keys()))
-
-   if st.button("Check Price"):
-    if not name:
-        st.warning("Please enter your name first.")
     else:
         price = events[selected_event]
         st.success(f"Price for **{selected_event}** is ₹{price}")
